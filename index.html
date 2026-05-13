@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Whisper.cc — The Launcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    :root {
+      --red:       #e0161a;
+      --red-dark:  #a00f12;
+      --red-glow:  rgba(224,22,26,0.35);
+      --bg:        #080608;
+      --surface:   #110c0d;
+      --border:    rgba(224,22,26,0.18);
+      --text:      #f0eaea;
+      --muted:     #6b5a5b;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.04;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Grid lines ── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 60px;
+      background: rgba(8,6,8,0.75);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px;
+      letter-spacing: 3px;
+      color: var(--text);
+    }
+    .logo span { color: var(--red); }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: color .2s;
+    }
+    nav a:hover { color: var(--text); }
+    .nav-links { display: flex; gap: 36px; }
+
+    /* ── Hero ── */
+    .hero {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+    }
+
+    /* Red spotlight */
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -100px; left: 50%; transform: translateX(-50%);
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, var(--red-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: var(--red);
+      text-transform: uppercase;
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeUp .6s .1s forwards;
+    }
+
+    h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(80px, 12vw, 160px);
+      line-height: .9;
+      letter-spacing: 2px;
+      margin-bottom: 28px;
+      opacity: 0;
+      animation: fadeUp .7s .2s forwards;
+    }
+    h1 .accent { color: var(--red); }
+
+    .sub {
+      font-size: 16px;
+      color: var(--muted);
+      max-width: 480px;
+      line-height: 1.7;
+      margin-bottom: 52px;
+      opacity: 0;
+      animation: fadeUp .7s .35s forwards;
+    }
+
+    .btn-group {
+      display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;
+      opacity: 0;
+      animation: fadeUp .7s .5s forwards;
+    }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 16px 36px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px; font-weight: 600;
+      letter-spacing: .5px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all .25s;
+      text-decoration: none;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--red);
+      color: #fff;
+      box-shadow: 0 0 32px var(--red-glow);
+    }
+    .btn-primary:hover {
+      background: var(--red-dark);
+      box-shadow: 0 0 52px var(--red-glow);
+      transform: translateY(-2px);
+    }
+    .btn-outline {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover {
+      border-color: var(--red);
+      color: var(--red);
+      transform: translateY(-2px);
+    }
+
+    /* ── Stats strip ── */
+    .stats {
+      position: relative; z-index: 1;
+      display: flex; justify-content: center; gap: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .stat {
+      flex: 1; max-width: 220px;
+      padding: 36px 24px;
+      text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .stat:last-child { border-right: none; }
+    .stat-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 48px;
+      color: var(--red);
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat-label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    /* ── Features ── */
+    .features {
+      position: relative; z-index: 1;
+      padding: 100px 60px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .section-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: var(--red);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(42px, 6vw, 72px);
+      line-height: 1;
+      margin-bottom: 64px;
+    }
+    .feat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2px;
+    }
+    .feat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 40px 32px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .3s;
+    }
+    .feat-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--red), transparent);
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .feat-card:hover { border-color: var(--red); }
+    .feat-card:hover::before { opacity: 1; }
+    .feat-icon {
+      width: 44px; height: 44px;
+      background: rgba(224,22,26,.12);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+    .feat-card h3 {
+      font-size: 17px; font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .feat-card p {
+      font-size: 14px; color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* ── Pricing ── */
+    .pricing {
+      position: relative; z-index: 1;
+      padding: 100px 24px;
+      text-align: center;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .price-card {
+      display: inline-block;
+      background: var(--bg);
+      border: 1px solid var(--red);
+      border-radius: 8px;
+      padding: 56px 64px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 0 80px rgba(224,22,26,.15);
+      position: relative;
+    }
+    .price-badge {
+      position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+      background: var(--red);
+      color: #fff;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 5px 20px;
+      border-radius: 20px;
+    }
+    .price-amount {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 96px;
+      line-height: 1;
+      color: var(--text);
+    }
+    .price-amount sup {
+      font-size: 36px;
+      vertical-align: super;
+      color: var(--red);
+    }
+    .price-period {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 32px;
+      letter-spacing: 1px;
+    }
+    .price-features {
+      list-style: none;
+      margin-bottom: 40px;
+      text-align: left;
+    }
+    .price-features li {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 14px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .price-features li:last-child { border-bottom: none; }
+    .price-features li span:first-child { color: var(--red); font-size: 16px; }
+
+    /* ── Key Auth section ── */
+    .keyauth {
+      position: relative; z-index: 1;
+      padding: 100px 60px;
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+    .keyauth-visual {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 32px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 2;
+    }
+    .keyauth-visual .key-line { color: var(--red); }
+    .keyauth-visual .val-line { color: #7ec8a0; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,.85);
+      backdrop-filter: blur(8px);
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 48px 40px;
+      width: 100%; max-width: 480px;
+      position: relative;
+      box-shadow: 0 0 80px rgba(0,0,0,.6);
+      animation: scaleIn .25s ease;
+    }
+    @keyframes scaleIn {
+      from { transform: scale(.94); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+    .modal-close {
+      position: absolute; top: 16px; right: 20px;
+      background: none; border: none;
+      color: var(--muted); font-size: 22px;
+      cursor: pointer; transition: color .2s;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal h2 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 36px; letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .modal p { font-size: 14px; color: var(--muted); margin-bottom: 32px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block;
+      font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .form-group input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      transition: border-color .2s;
+      outline: none;
+    }
+    .form-group input:focus { border-color: var(--red); }
+    #stripe-card-element {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+      transition: border-color .2s;
+    }
+    #stripe-card-element.StripeElement--focus { border-color: var(--red); }
+
+    .pay-note {
+      font-size: 12px; color: var(--muted);
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 16px;
+    }
+    #payment-message {
+      font-size: 13px;
+      margin-top: 12px;
+      min-height: 18px;
+      color: var(--red);
+    }
+    #payment-message.success { color: #7ec8a0; }
+
+    /* ── Footer ── */
+    footer {
+      position: relative; z-index: 1;
+      padding: 48px 60px;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      color: var(--muted); font-size: 13px;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 768px) {
+      nav { padding: 16px 24px; }
+      .nav-links { display: none; }
+      .features, .keyauth { padding: 60px 24px; }
+      .keyauth { grid-template-columns: 1fr; gap: 40px; }
+      .stats { flex-wrap: wrap; }
+      .stat { min-width: 50%; border-right: none; border-bottom: 1px solid var(--border); }
+      footer { flex-direction: column; gap: 12px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">WHISPER<span>.</span>CC</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#keyauth">Key Auth</a>
+  </div>
+  <a href="#pricing" class="btn btn-primary" style="padding:10px 24px;font-size:13px;">Get Access — $1.99</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <p class="eyebrow">// Precision Software Infrastructure</p>
+  <h1>WHISPER<br/><span class="accent">LAUNCHER</span></h1>
+  <p class="sub">Secure. Silent. Instantaneous. The launcher built for those who demand absolute performance and zero compromise.</p>
+  <div class="btn-group">
+    <button class="btn btn-primary" onclick="openModal()">
+      ⚡ Get Launcher — $1.99
+    </button>
+    <a href="#features" class="btn btn-outline">See Features</a>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat"><div class="stat-num">99.9%</div><div class="stat-label">Uptime</div></div>
+  <div class="stat"><div class="stat-num">12ms</div><div class="stat-label">Launch Speed</div></div>
+  <div class="stat"><div class="stat-num">256-bit</div><div class="stat-label">Encryption</div></div>
+  <div class="stat"><div class="stat-num">24/7</div><div class="stat-label">Support</div></div>
+</div>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <p class="section-label">// What you get</p>
+  <h2 class="section-title">BUILT<br/>DIFFERENT</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="feat-icon">🔑</div>
+      <h3>License Key Auth</h3>
+      <p>Every purchase generates a unique cryptographic license key bound to your account. No sharing, no cracking.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">⚡</div>
+      <h3>Instant Delivery</h3>
+      <p>Your key arrives in your inbox within seconds of purchase. No waiting, no verification delays.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🤖</div>
+      <h3>Discord Integration</h3>
+      <p>Verify your license directly in our Discord server and receive your launcher download securely via DM.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🛡️</div>
+      <h3>Anti-Tamper</h3>
+      <p>Hardware-fingerprinted sessions mean your launcher is tied to your machine — nobody else can use your key.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🌐</div>
+      <h3>Always Updated</h3>
+      <p>Launcher auto-updates silently in the background. You always run the latest, most optimized version.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">💬</div>
+      <h3>Priority Support</h3>
+      <p>Access dedicated support channels. Real humans, fast responses, zero boilerplate.</p>
+    </div>
+  </div>
+</section>
+
+<!-- KEYAUTH -->
+<section class="keyauth" id="keyauth">
+  <div>
+    <p class="section-label">// License System</p>
+    <h2 class="section-title">KEY<br/>AUTH</h2>
+    <p style="color:var(--muted);font-size:15px;line-height:1.8;margin-bottom:24px;">
+      Every license is cryptographically unique, tied to your email, and verified server-side on every launch. Your key cannot be transferred, shared, or spoofed.
+    </p>
+    <ul style="list-style:none;display:flex;flex-direction:column;gap:12px;">
+      <li style="display:flex;gap:12px;font-size:14px;color:var(--muted);">
+        <span style="color:var(--red);">→</span> Unique per-user license generation
+      </li>
+      <li style="display:flex;gap:12px;font-size:14px;color:var(--muted);">
+        <span style="color:var(--red);">→</span> Server-side validation on every use
+      </li>
+      <li style="display:flex;gap:12px;font-size:14px;color:var(--muted);">
+        <span style="color:var(--red);">→</span> Instant revocation if terms are violated
+      </li>
+      <li style="display:flex;gap:12px;font-size:14px;color:var(--muted);">
+        <span style="color:var(--red);">→</span> Discord bot verification support
+      </li>
+    </ul>
+  </div>
+  <div class="keyauth-visual">
+    <span class="key-line">// license validation</span><br/>
+    <br/>
+    <span style="color:#c9a96e;">user</span>: {<br/>
+    &nbsp;&nbsp;<span class="key-line">email</span>: <span class="val-line">"user@example.com"</span>,<br/>
+    &nbsp;&nbsp;<span class="key-line">key</span>: <span class="val-line">"WSP-XXXX-XXXX-XXXX"</span>,<br/>
+    &nbsp;&nbsp;<span class="key-line">hwid</span>: <span class="val-line">"a3f8c1..."</span><br/>
+    }<br/>
+    <br/>
+    <span style="color:#c9a96e;">response</span>: {<br/>
+    &nbsp;&nbsp;<span class="key-line">valid</span>: <span class="val-line">true</span>,<br/>
+    &nbsp;&nbsp;<span class="key-line">status</span>: <span class="val-line">"AUTHENTICATED"</span>,<br/>
+    &nbsp;&nbsp;<span class="key-line">download</span>: <span class="val-line">"[secure url]"</span><br/>
+    }
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <p class="section-label" style="margin-bottom:16px;">// One-time payment</p>
+  <h2 class="section-title" style="margin-bottom:56px;">GET<br/>ACCESS</h2>
+  <div class="price-card">
+    <div class="price-badge">One Time</div>
+    <div class="price-amount"><sup>$</sup>1<span style="font-size:48px;">.99</span></div>
+    <p class="price-period">Lifetime License — Pay Once</p>
+    <ul class="price-features">
+      <li><span>✦</span><span>Unique license key via email</span></li>
+      <li><span>✦</span><span>Discord bot verification</span></li>
+      <li><span>✦</span><span>Lifetime launcher access</span></li>
+      <li><span>✦</span><span>Auto-updates included</span></li>
+      <li><span>✦</span><span>Priority support</span></li>
+    </ul>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:15px;padding:18px;" onclick="openModal()">
+      Purchase Now — $1.99
+    </button>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="logo" style="font-size:20px;">WHISPER<span style="color:var(--red);">.</span>CC</div>
+  <span>© 2025 Whisper.cc — All rights reserved</span>
+  <span>Terms · Privacy · Support</span>
+</footer>
+
+<!-- PURCHASE MODAL -->
+<div class="modal-overlay" id="modal" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h2>GET ACCESS</h2>
+    <p>Enter your details and complete payment. Your license key will arrive instantly.</p>
+
+    <div class="form-group">
+      <label>Email Address</label>
+      <input type="email" id="email-input" placeholder="you@example.com"/>
+    </div>
+
+    <div class="form-group">
+      <label>Card Details</label>
+      <div id="stripe-card-element"></div>
+    </div>
+
+    <div id="payment-message"></div>
+
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;font-size:15px;padding:18px;" id="pay-btn" onclick="handlePayment()">
+      Pay $1.99 — Get Instant Access
+    </button>
+
+    <p class="pay-note">
+      <span>🔒</span> Secured by Stripe. We never store your card.
+    </p>
+  </div>
+</div>
+
+<script>
+  // ── Replace with your Stripe publishable key ──
+  const STRIPE_PUBLISHABLE_KEY = 'pk_test_51TVxlI2OpTDt5xpgWlta85oqtrCJpbbqvsDkzVLCpH4NzJFvjCv3mzzwyp5GpCMKZxsFLhDvxs737XaCxiuVQd5B00sFXzjwpG';
+
+  // ── Replace with your backend URL ──
+  const BACKEND_URL = 'https://whisper-web-production.up.railway.app';
+
+  let stripe, cardElement;
+
+  function initStripe() {
+    stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+    const elements = stripe.elements({
+      appearance: {
+        theme: 'night',
+        variables: {
+          colorPrimary: '#e0161a',
+          colorBackground: '#080608',
+          colorText: '#f0eaea',
+          colorDanger: '#ff4444',
+          fontFamily: 'DM Sans, sans-serif',
+          borderRadius: '6px',
+        }
+      }
+    });
+    cardElement = elements.create('card', {
+      style: {
+        base: { color: '#f0eaea', fontFamily: 'DM Sans, sans-serif', fontSize: '14px' }
+      }
+    });
+    cardElement.mount('#stripe-card-element');
+  }
+
+  function openModal() {
+    document.getElementById('modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    if (!stripe) initStripe();
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+    document.body.style.overflow = '';
+    document.getElementById('payment-message').textContent = '';
+  }
+
+  function handleOverlayClick(e) {
+    if (e.target === document.getElementById('modal')) closeModal();
+  }
+
+  async function handlePayment() {
+    const email = document.getElementById('email-input').value.trim();
+    const msg   = document.getElementById('payment-message');
+    const btn   = document.getElementById('pay-btn');
+
+    if (!email || !email.includes('@')) {
+      msg.textContent = 'Please enter a valid email address.';
+      return;
+    }
+
+    btn.textContent = 'Processing...';
+    btn.disabled = true;
+    msg.textContent = '';
+    msg.className = '';
+
+    try {
+      // 1. Create PaymentIntent on your backend
+      const res = await fetch(`${BACKEND_URL}/create-payment-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const { clientSecret } = await res.json();
+
+      // 2. Confirm card payment
+      const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: { card: cardElement, billing_details: { email } }
+      });
+
+      if (error) {
+        msg.textContent = error.message;
+        btn.textContent = 'Pay $1.99 — Get Instant Access';
+        btn.disabled = false;
+        return;
+      }
+
+      if (paymentIntent.status === 'succeeded') {
+        msg.textContent = '✓ Payment successful! Check your email for your license key.';
+        msg.className = 'success';
+        btn.textContent = '✓ Purchase Complete';
+      }
+    } catch (err) {
+      msg.textContent = 'Something went wrong. Please try again.';
+      btn.textContent = 'Pay $1.99 — Get Instant Access';
+      btn.disabled = false;
+    }
+  }
+</script>
+</body>
+</html>
